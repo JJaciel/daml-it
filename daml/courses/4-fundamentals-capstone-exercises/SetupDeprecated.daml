@@ -1,0 +1,44 @@
+module SetupDeprecated where
+
+import Daml.Script
+import DA.Date (date, Month(Nov, Aug))
+import Deprecated
+
+setupPartyAndUser: Text -> Text -> Text -> Script Party
+setupPartyAndUser partyName partyHint userName = script do
+    party <- allocatePartyWithHint partyName (PartyIdHint partyHint)
+    id <- validateUserId userName
+    createUser (User id (Some party)) [CanActAs party]
+    return party
+
+setupDeprecated : Script ()
+setupDeprecated = script do
+    planner <- setupPartyAndUser "Planner" "PLANNER" "Antony"
+    productionManager <- setupPartyAndUser "ProductionManager" "PROD_MANAGER" "Kyle"
+    -- inspector <- setupPartyAndUser "Inspector" "INSPECTOR" "Rick"
+    operator1 <- setupPartyAndUser "Operator" "OPERATOR_A" "Sandra"
+    operator2 <- setupPartyAndUser "Operator" "OPERATOR_B" "Dylan"
+
+    now <- getTime
+
+    let 
+        bicycleProduct = ProductData with
+            id = "BCYC-A"
+            productName = "Bicycle With Turbine"
+            generallyImpliedRequirement = "Common bicycle with a turbine mounted"
+            billOfMaterials = ["Frame", "Wheel-A", "Wheel-B", "Saddle", "Turbine", "Handlebar"]
+        
+        requirement = RequirementData with 
+            product = bicycleProduct
+            quantity = 20
+            creationDate = date 2023 Aug 01
+            dueDate = date 2023 Nov 01
+
+    requirementCId <- submit planner do
+        createCmd Requirement with
+            planner = planner
+            productionManager = productionManager
+            requirementId = "2023-14"
+            requirementInfo = requirement
+
+    return()

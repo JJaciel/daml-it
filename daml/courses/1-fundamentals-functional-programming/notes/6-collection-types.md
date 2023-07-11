@@ -1,0 +1,139 @@
+# Collection types
+## Lists
+```haskell
+module CollectionTypesExample where
+
+import Daml.Script
+import DA.List
+
+listTest: Script()
+listTest = script do
+    let 
+        intList = [4, 1, 2, 3]
+        fruitList = ["Orange", "Apple", "Banana"]
+        veggieList = ["Carrot", "Potato"]
+        fruitAndVeggies = fruitList <> veggieList -- creates a new variable
+        -- "<>" can be used to concatenate lists too
+        -- "++" works only for lists
+        fruitAndVeggies2 = fruitList ++ veggieList -- works as above
+        -- range notation
+        rangeList = [2 .. 5] -- [2, 3, 4, 5]
+        -- above take the first two elements to infer the pattern in the sequence
+        evenList = [2, 4 .. 10] -- 2, 4, 6, 8, 10
+
+
+    debug $ fruitList -- no need to show if is only a list
+    debug $ show fruitList <> show intList
+    debug $ "Head: " <> show (head fruitList) -- returns the first element
+    debug $ "Tail: " <> show (tail fruitList) -- returns the rest of the elements after the head
+    debug $ "Last: " <> show (last fruitList)
+    debug $ "Sort: " <> show (sort fruitList) -- alphabetically
+    debug $ "Sort: " <> show (sort intList) -- ascending
+    debug $ "Init: " <> show (init fruitList) -- all except the last one
+    debug $ "Reverse: " <> show (reverse fruitList)
+    debug $ "Take: " <> show (take 2 fruitList) -- takes as many as specified, starting with the first
+    debug $ "Elem: " <> show (elem "Apple" fruitList) -- returns boolean
+    debug $ "Elem: " <> show ("Apple" `elem` fruitList)
+    debug $ "Sum: " <> show (sum intList)
+    debug $ "Product: " <> show (product intList)
+    debug $ "Range: " <> (show rangeList)
+    debug $ "Even: " <> (show evenList)
+    debug $ "Prepend: " <> show ("Mango" :: fruitList) -- doesn't mutate the fruitList
+    debug $ fruitAndVeggies
+```
+
+## Tuples
+- can contain elements of different data types
+- Daml provides functions for tuples with 2 or 3 elements
+```haskell
+module CollectionTypesExample where
+
+import Daml.Script
+import DA.Tuple (thd3, snd3, fst3)
+
+tupleTest: Script()
+tupleTest = script do 
+    let
+        twoTuple = ("abc", 123)
+        threeTuple = ("a", 456, True)
+        nTuple = (1, "hello", True, [3,4])
+    
+    debug $ fst twoTuple -- access fist element in tuple
+    debug $ snd twoTuple -- access second element in tuple
+
+    -- access first in a three-tuple
+    -- requires import of "import DA.Tuple (fst3)"
+    debug $ fst3 threeTuple
+    -- access second in a three-tuple
+    -- requires import of "import DA.Tuple (snd3)"
+    debug $ snd3 threeTuple
+    -- access third in a three-tuple
+    -- requires import of "import DA.Tuple (thd3)"
+    debug $ thd3 threeTuple
+
+    -- select the element starting with index 1
+    -- underscore accessor only works for tuples up to 5 elements
+    debug $ nTuple._1
+    debug $ nTuple._4
+
+```
+
+## Sets
+- can only have unique elements
+- can only be of one type of data
+```haskell
+module CollectionTypesExample where
+
+import Daml.Script
+import DA.Set as Set
+
+-- Sets requires to import "import DA.Set as Set"
+setTest: Script()
+setTest = script do
+    let 
+        fruitSet: Set Text
+        fruitSet = Set.empty
+    let fruitList = ["apple", "banana", "cherry", "apple"]
+    let fruitSet = Set.fromList fruitList
+
+    debug $ Set.size fruitSet
+    debug $ show fruitSet
+    debug $ Set.member "mango" fruitSet
+    debug $ "..........................................."
+
+    let newFruitSet = Set.insert "mango" fruitSet
+    debug $ Set.size newFruitSet
+    debug $ show newFruitSet
+    debug $ Set.member "mango" newFruitSet
+```
+
+## Maps
+Structure of key and value pairs
+
+```haskell
+module CollectionTypesExample where
+
+import Daml.Script
+import DA.Map as Map
+
+-- Maps requires to import "import DA.Map as Map"
+mapTest: Script()
+mapTest = script do
+    let
+        wordMap: Map Text Text
+        wordMap = Map.empty
+    let 
+        words = [("a", "apple"), ("b", "banana")]
+        wordMap = Map.fromList words
+
+    debug $ show words
+    debug $ show wordMap
+    debug $ Map.size wordMap
+    debug $ Map.lookup "a" wordMap
+    debug $ Map.lookup "c" wordMap
+
+    let 
+        newWordMap = Map.insert "c" "cherry" wordMap
+    debug $ Map.size newWordMap
+    debug $ show newWordMap
+```

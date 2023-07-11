@@ -1,0 +1,96 @@
+module LabFour where
+
+import Daml.Script
+import DA.List (last, head, tail)
+import DA.Foldable (Foldable(minimum))
+import DA.Math (sqrt)
+
+-- Problem Statement 1
+
+getLetterGradeUsingIf: Decimal -> Text
+getLetterGradeUsingIf x = 
+    if (x < 70.0) then "F"
+    else if (x < 80.0) then "C"
+    else if (x < 90.0) then "B"
+    else "A"
+
+getScoreUsingCase: Text -> Text
+getScoreUsingCase grade = case (grade) of
+    "A" -> "Score 90+"
+    "B" -> "80 to 90"
+    "C" -> "70 to 80"
+    "F" -> "less than 70"
+    _ -> "Invalid grade letter"
+
+getLetterGradeUsingGuards: Decimal -> Text
+getLetterGradeUsingGuards x
+    | x < 70.0 = "F"
+    | x < 80.0 = "C"
+    | x < 90.0 = "B"
+    | otherwise = "A"
+
+getAverageGradeLetter: Decimal -> Decimal -> Text
+getAverageGradeLetter x y
+    | average < 70.0 = "F"
+    | average < 80.0 = "C"
+    | average < 90.0 = "B"
+    | otherwise = "A"
+    where average = (x + y)/ 2.0
+
+testGrades: Script()
+testGrades = script do 
+    debug $ getLetterGradeUsingIf 90.0
+    debug $ getLetterGradeUsingIf 85.0
+    debug $ getLetterGradeUsingIf 75.0
+    debug $ getLetterGradeUsingIf 65.00
+    debug "----------"
+    debug $ getScoreUsingCase "A"
+    debug $ getScoreUsingCase "B"
+    debug $ getScoreUsingCase "C"
+    debug $ getScoreUsingCase "F"
+    debug $ getScoreUsingCase "X"
+    debug "----------"
+    debug $ getLetterGradeUsingGuards 90.0
+    debug $ getLetterGradeUsingGuards 80.0
+    debug $ getLetterGradeUsingGuards 70.0
+    debug $ getLetterGradeUsingGuards 60.0
+    debug "----------"
+    debug $ getAverageGradeLetter 75.0 83.0
+    debug $ getAverageGradeLetter 95.0 83.0
+    debug $ getAverageGradeLetter 98.0 83.0
+    debug $ getAverageGradeLetter 60.0 70.0
+
+    return()
+
+
+-- Problem Statement 2
+
+errMsg1 = "Error: Triangle has 3 sides"
+errMsg2 = "Error: Side of a triangle cannot be 0.0"
+errMsg3 =  "Error: This can't be a triangle as sum of any two sides must be greater than the third"
+
+area: Decimal -> Decimal -> Decimal -> Decimal
+area x y z = sqrt ( ((x + y + z)/2.0) * ((((x + y + z)/2.0) - x) * (((x + y + z)/2.0) - y)) * (((x + y + z)/2.0) - z) )
+triangleArea: [Decimal] -> Either Text Decimal
+triangleArea sides =
+    if (length sides /= 3) then
+        Left errMsg1
+    else if ((minimum sides) <= 0.0) then
+        Left errMsg2
+    else if ((sum (tail sides)) <= (head $ sides))
+        || ((sum (take 2 sides)) <= (last $ sides))
+        || (((head sides) + (last sides)) <= last  (take 2 sides)) then
+        Left "Error: This can't be a triangle as sum of any two sides must be greater than the third"
+    else 
+        Right (area (head sides) (last (take 2 sides)) (last sides))
+
+
+testTriangle : Script()
+testTriangle = script do 
+
+    debug $ triangleArea [4.0, 2.0, 5.0]
+    debug $ triangleArea [1.0, 2.0, 3.0]
+    debug $ triangleArea [1.0, 2.0]
+    debug $ triangleArea [1.0, 2.0, 0.0]
+
+    return ()

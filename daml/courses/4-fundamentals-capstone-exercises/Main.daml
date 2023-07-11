@@ -1,0 +1,104 @@
+module Main where
+
+data RequirementData = RequirementData with
+    product: Text
+    quantity: Int
+        deriving (Show, Eq)
+
+
+template Requirement
+    with
+        planner: Party
+        productionManager: Party
+
+        requirementId: Text
+        requirementInfo: RequirementData
+    where
+        signatory planner
+        observer productionManager
+
+        nonconsuming choice CreateProductLot: ContractId ProductLot
+            with
+                assignedOperators: [Party]
+            controller productionManager
+                do 
+                    create ProductLot with
+                        processMap = []
+                        completedProcesses = []
+                        status = ""
+                        ..
+
+
+type ProcessMapItem = (Text, Party, Int)
+type CompletedProcesses = (ProcessMapItem, Text)
+
+template ProductLot
+    with
+        productionManager: Party
+        planner: Party
+
+        requirementId: Text
+        requirementInfo: RequirementData
+        processMap: [ProcessMapItem]
+        completedProcesses: [CompletedProcesses]
+        status: Text
+    where
+        signatory productionManager
+        observer planner
+
+        choice AddStatus: ContractId ProductLot
+            with
+                updater: Party
+                newStatus: Text
+            controller updater
+            do create this with
+                status = newStatus
+
+
+template ProductionService
+    with
+        manager: Party
+    where
+        signatory manager
+
+        nonconsuming choice CreateProcessAssignment: ContractId ProcessAssignment
+            with
+                processToAssign: Process
+            controller manager
+            do create ProcessAssignment
+                with process = processToAssign
+
+template ProcessAssignment
+    with
+        process: Process
+    where
+        signatory process.manager
+        observer process.operator
+
+        choice AcceptAssignment: ContractId Process
+            controller process.operator
+            do create process
+              
+template Process
+    with
+        operator: Party
+        manager: Party
+
+        name: Text
+        index: Int
+        lotId: ContractId ProductLot
+    where
+        signatory operator
+
+        choice UpdateProductLot: ContractId ProductLot
+            controller operator
+            do exercise lotId AddStatus
+                with
+                    updater = operator
+                    newStatus = "UPDATED"
+
+
+
+    
+    
+        

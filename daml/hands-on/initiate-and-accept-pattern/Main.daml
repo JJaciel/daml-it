@@ -1,0 +1,97 @@
+module Main where
+
+import Daml.Script
+
+type ChoreProposalId = ContractId ChoreProposal
+type ChoreContractId = ContractId ChoreContract
+
+-- Proposal
+template ChoreProposal
+    with
+        child : Party
+        parent : Party
+        chore : Text
+        note : Text
+    where
+        signatory child
+        observer child, parent
+        -- what the child can do
+        -- propose
+        choice Propose : ChoreProposalId
+            controller child
+            do 
+                create this
+        -- revise
+        choice Revise : ChoreProposalId
+            with 
+                revision : Text
+                feedbackText : Text
+            controller child
+            do
+                create this with
+                    chore = revision
+                    note = feedbackText
+        -- what the parent can do
+        -- reject
+        choice Reject : ChoreProposalId
+            with 
+                feedback : Text
+            controller parent
+            do
+                create this with
+                    note = feedback
+        -- accept
+        choice Accept : ChoreContractId
+            controller parent
+            do
+                create ChoreContract with
+                    parentInContract = parent
+                    childInContract = child
+                    choreName = chore
+
+-- Contract
+template ChoreContract
+    with
+        parentInContract : Party
+        childInContract : Party
+        choreName : Text
+    where
+        signatory parentInContract, childInContract
+
+-- Test
+setup : Script ChoreContractId
+setup = script do
+    -- assign parent and child parties
+    jaciel <- allocatePartyWithHint "Jaciel" (PartyIdHint "Jaciel")
+    tadeo <- allocatePartyWithHint "Tadeo" (PartyIdHint "Tadeo")
+    jacielId <- validateUserId "jaciel"
+    tadeoId <- validateUserId "tadeo"
+    createUser (User jacielId (Some jaciel)) [CanActAs jaciel]
+    createUser (User tadeoId (Some tadeo)) [CanActAs tadeo]
+
+    -- child propose to take out trash por vbucks
+    childFirstProposal <- submit tadeo do
+        createCmd ChoreProposal with
+            child = tadeo
+            parent = jaciel
+            chore = "Take out today's recycles for 5,000 vbucks"
+            note = "I want a new skin"
+
+    -- parent didn't like the terms, rejects it w feedback
+    parentRejectsProposal <- submit jaciel do
+        exerciseCmd childFirstProposal Reject
+            with 
+                feedback = "So many vbucks boy"
+
+    -- child revises the terms, and re-proposes
+    childBetterProposal <- submit tadeo do
+        exerciseCmd parentRejectsProposal Revise
+            with 
+                revision = "I will take the recycles for a week"
+                feedbackText = "Ok, what about this change"
+
+    -- parent like new terms, accepts it
+    submit jaciel do
+        exerciseCmd childBetterProposal Accept
+
+        

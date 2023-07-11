@@ -1,0 +1,99 @@
+module Lab3 where
+
+import DA.Optional
+
+type CLPAccountId = ContractId CLPAccount
+type CLPApplicationId = ContractId CLPApplication
+
+
+template CLPAccount
+  with
+    customer          : Party
+    airline           : Party
+
+    id                : Text
+    name              : Text
+    address           : Text
+    email             : Text
+    phone             : Optional Text
+    timestamp         : Time
+    dob               : Date
+    points            : Int
+  where
+    signatory customer, airline
+
+    key (airline, id): (Party, Text)
+    maintainer key._1
+
+    choice AddPoints : ContractId CLPAccount 
+            with 
+                newPoints: Int 
+            controller airline 
+            do 
+                create CLPAccount with 
+                    points = points + newPoints
+                    ..
+  
+    
+
+template CLPApplication
+  with
+    customer          : Party
+    airline           : Party
+
+    id                : Text
+    name              : Text
+    address           : Text
+    email             : Text
+    phone             : Optional Text
+    timestamp         : Time
+    dob               : Date
+  where
+    signatory customer
+    observer airline
+
+    let 
+      key: (Party, Text) = (airline, id)
+      -- assertKey: Optional CLPAccountId = lookupByKey @CLPAccount key
+
+    -- Customer Choices
+    choice SubmitApplication : CLPApplicationId
+      with
+        appCustomer       : Party
+        appAirline        : Party
+        customerId        : Text
+        customerName      : Text
+        customerAddress   : Text
+        customerEmail     : Text
+        customerPhone     : Optional Text
+        appTimeStamp         : Time
+        customerDob       : Date
+      controller customer
+      do 
+        create this with
+          customer = appCustomer
+          airline = appAirline
+          id = customerId
+          name = customerName
+          address = customerAddress
+          email = customerEmail
+          phone = customerPhone
+          timestamp = appTimeStamp
+          dob = customerDob
+
+    -- Airline Choices
+    choice ReviewApplication : Optional (ContractId CLPAccount)
+      controller airline
+        do
+          account <- lookupByKey @CLPAccount (airline, id)
+          now <- getTime
+
+          if (isSome account) then
+            return None
+          else do
+            account <- create CLPAccount with
+              -- args necessary
+              timestamp = now
+              points = 0
+              .. -- spread current contract arguments
+            return (Some account)

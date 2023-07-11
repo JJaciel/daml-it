@@ -1,0 +1,225 @@
+module Deprecated where
+
+
+import DA.Time
+import DA.List (head, sortOn, (\\), uniqueOn)
+import DA.Optional (fromSome, isNone, isSome)
+import DA.Date (date, Month(Aug))
+
+data ProductData = ProductData with
+    id: Text
+    productName: Text
+    generallyImpliedRequirement: Text
+    billOfMaterials: [Text]
+        deriving (Show, Eq)
+
+data RequirementData = RequirementData with
+    product: ProductData
+    quantity: Int
+    creationDate: Date
+    dueDate: Date
+        deriving (Show, Eq)
+
+
+template Requirement
+    with
+        planner: Party
+        productionManager: Party
+
+        requirementId: Text
+        requirementInfo: RequirementData
+    where
+        signatory planner
+        observer productionManager
+
+        key (planner, requirementInfo) : (Party, RequirementData)
+        maintainer key._1
+
+        nonconsuming choice CreateProductLot: ContractId ProductLot
+            with
+                assignedOperators: [Party]
+                assignedInspector: Party
+            controller productionManager
+                do 
+                    create ProductLot with
+                        operators = assignedOperators
+                        inspector = assignedInspector
+                        processMap = []
+                        completedProcesses = []
+                        status = "Requirement Phase"
+                        ..
+
+data ProcessResultData = ProcessResultData with
+    operator: Party
+    name: Text
+    startDate: Date
+    endDate: Date
+    totalHours: Numeric 2
+    verificationDate: Date
+    releaseDate: Date
+    isReprocess: Bool
+    isConformant: Bool
+    isScrap: Bool
+        deriving (Show, Eq, Ord)
+
+class ProcessData i o where
+    getProcessDuration : i -> o
+    getTotalDuration: i -> o
+
+instance ProcessData ProcessResultData Int where
+    getProcessDuration proc =
+        let
+        start: Time = time proc.startDate 00 00 00
+        end: Time = time proc.endDate 00 00 00
+        diff: RelTime = subTime end start
+        daysDiff: Int = wholeDays diff
+        in
+        daysDiff
+    getTotalDuration proc =
+        let
+        start: Time = time proc.startDate 00 00 00
+        end: Time = time proc.releaseDate 00 00 00
+        diff: RelTime = subTime end start
+        daysDiff: Int = wholeDays diff
+        in
+        daysDiff
+
+type ProcessName = Text
+type ProcessAssignee = Party
+type ProcessStepNumber = Int
+type ProcessMapItem = (ProcessName, ProcessAssignee, ProcessStepNumber)
+type CompletedProcesses = (ProcessMapItem, ProcessResultData)
+
+getNextProcess: [ProcessMapItem] -> [ProcessMapItem] -> Optional ProcessMapItem
+getNextProcess map completed = 
+    do
+        let
+            toComplete = sortOn (\x -> x._3) (map \\ completed)
+        if (null toComplete) then None
+        else Some (head toComplete)
+
+
+
+template ProductLot
+    with
+        productionManager: Party
+        planner: Party
+        operators: [Party]
+        inspector: Party
+
+        requirementId: Text
+        requirementInfo: RequirementData
+        processMap: [ProcessMapItem]
+        completedProcesses: [CompletedProcesses]
+        status: Text
+    where
+        signatory productionManager
+        observer planner, operators
+
+        key (productionManager, requirementId) : (Party, Text)
+        maintainer key._1
+
+        choice AddProcessToMap : ContractId ProductLot
+            with
+                assignee: Party
+                process: Text
+                stepNumber: Int
+            controller productionManager
+                do
+                    let
+                        newProcessMap = (process, assignee, stepNumber) :: processMap
+                        currentProcessesInMap = map (\x -> x._1) processMap
+                    -- assertMsg "Process already on Map" (process `notElem` currentProcessesInMap)
+                    assertMsg "Process already on Map" (uniqueOn (._1) newProcessMap)
+                    assertMsg "Step already in use" (uniqueOn (._3) newProcessMap)
+                    assertMsg "Operator not assigned to ProductLot" (assignee `elem` operators)
+                    create this with
+                        processMap = newProcessMap
+                        status = "Fulfilling Phase"
+
+        -- | would be used to create a Process, assign it to an operator as "Ready to start"
+        -- | takes the next process in the queue that is not completed
+        choice AssignNextProcess : ContractId ProductLot
+            controller operators, inspector
+            do
+                assertMsg "There're no processes in the map" (null processMap)
+                let
+                    next = getNextProcess processMap (map (._1) completedProcesses)
+                assertMsg "There are no more processes to perform" (isNone next)
+                if (isSome next) then do
+                    let processMapItem = fromSome next
+                    create Process with
+                        inspector
+                        name = processMapItem._1
+                        operator = processMapItem._2
+                        index = processMapItem._3
+                        lotId = self
+                    create this with
+                        status = "Processing Phase"
+                else do
+                    create this with
+                        status = "Ready To Release"
+
+        -- | stores the completed process
+        -- | if is conformant exercises AssignNextProcess
+        choice CompleteProcess : ContractId ProductLot
+            with
+                isConformant: Bool
+                isScrap: Bool
+                completedProcess: CompletedProcesses
+            controller operators, inspector
+            do
+                let completed = completedProcesses ++ [completedProcess]
+
+                if (isScrap) then do
+                    create this with
+                        completedProcesses = completed
+                        status = "Scrap"
+                else if (isConformant) then do
+                    create this with
+                        completedProcesses = completed
+                    exercise self AssignNextProcess
+                else do
+                    create this with
+                        completedProcesses = completed
+
+              
+-- | only can be created by the operator
+template Process
+    with
+        operator: Party
+        inspector: Party
+
+        name: Text
+        index: Int
+        lotId: ContractId ProductLot
+    where
+        signatory operator
+        observer inspector
+
+        let 
+            thisProcess = ProcessResultData with
+                operator = operator
+                name = name
+                startDate = date 2023 Aug 01
+                endDate = date 2023 Aug 01
+                totalHours = 0.00
+                verificationDate = date 2023 Aug 01
+                releaseDate = date 2023 Aug 01
+                isReprocess = False
+                isConformant = True
+                isScrap = False
+
+        choice Complete: ()
+            controller operator
+            do
+                exercise lotId CompleteProcess
+                    with
+                        isConformant = True
+                        isScrap = False
+                        completedProcess = ((name, operator, index), thisProcess)
+                return ()
+
+    
+    
+        

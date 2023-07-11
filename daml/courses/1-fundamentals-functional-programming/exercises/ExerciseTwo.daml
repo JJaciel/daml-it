@@ -1,0 +1,52 @@
+module ExerciseTwo where
+
+import Daml.Script
+import DA.List as List
+-- import DA.Tuple (thd3, snd3, fst3)
+-- import DA.Set as Set
+import DA.Map as Map
+import DA.Text (words)
+
+
+problemStatementOneTest: Script()
+problemStatementOneTest = script do
+    let
+        song = [("do", "a deer, a female deer"), ("re", "a drop of golden sun"), ("mi", "a name, I call myself"), ("fa", "a long long way to run")]
+        one = head song
+        two = head (tail song)
+        three = last (take 3 song)
+        four = last song
+
+        firstOnTupleList = [fst one, fst two, fst three, fst four]
+        secondOnTupleList = [snd one, snd two, snd three, snd four]
+
+    debug firstOnTupleList
+    debug secondOnTupleList
+
+    debug (reverse firstOnTupleList)
+    debug (reverse secondOnTupleList)
+
+    let
+        notesMap: Map Text Text
+        notesMap = Map.empty
+        notesMap = Map.fromList song
+
+    debug $ Map.lookup "do" notesMap
+    debug $ Map.lookup "re" notesMap
+    debug $ Map.lookup "mi" notesMap
+    debug $ Map.lookup "fa" notesMap
+
+
+
+problemStatementTwoTest: Script()
+problemStatementTwoTest = script do
+    let 
+        termFrequency: Text -> Text -> Decimal
+        termFrequency w s =  intToDecimal (length (List.filter (== w) (words s))) / intToDecimal (length (words s))
+            
+
+    debug $ termFrequency "long" "a long long way to run"
+
+
+  
+

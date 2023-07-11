@@ -1,0 +1,58 @@
+module Setup where
+
+import Daml.Script
+import Main
+
+setupPartyAndUser: Text -> Text -> Text -> Script Party
+setupPartyAndUser partyName partyHint userName = script do
+    party <- allocatePartyWithHint partyName (PartyIdHint partyHint)
+    id <- validateUserId userName
+    createUser (User id (Some party)) [CanActAs party]
+    return party
+
+setupSecondary : Script ()
+setupSecondary = script do
+    planner <- setupPartyAndUser "Planner" "PLANNER" "Antony"
+    productionManager <- setupPartyAndUser "ProductionManager" "PROD_MANAGER" "Kyle"
+    operator1 <- setupPartyAndUser "Operator" "OPERATOR_A" "Sandra"
+    operator2 <- setupPartyAndUser "Operator" "OPERATOR_B" "Dylan"
+
+    now <- getTime
+
+    let         
+        requirement = RequirementData with 
+            product = "Bicycle"
+            quantity = 20
+
+    requirementCId <- submit planner do
+        createCmd Requirement with
+            planner = planner
+            productionManager = productionManager
+            requirementId = "101"
+            requirementInfo = requirement
+
+    return()
+
+
+setup : Script ()
+setup = script do
+    planner <- setupPartyAndUser "Planner" "PLANNER" "Antony"
+    productionManager <- setupPartyAndUser "ProductionManager" "PROD_MANAGER" "Kyle"
+    operator1 <- setupPartyAndUser "Operator" "OPERATOR_A" "Sandra"
+    operator2 <- setupPartyAndUser "Operator" "OPERATOR_B" "Dylan"
+
+    requirementCId <- submit planner do
+        createCmd Requirement with
+            planner = planner
+            productionManager = productionManager
+            requirementId = "101"
+            requirementInfo = RequirementData with 
+                product = "Bicycle"
+                quantity = 20
+
+    prodService <- submit productionManager do
+        createCmd ProductionService with
+            manager = productionManager
+
+    return()
+

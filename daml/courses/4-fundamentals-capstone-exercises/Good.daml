@@ -1,0 +1,201 @@
+module Good where
+
+import DA.List (sortOn)
+
+-- | Service contract
+template MRPService
+    with
+        planner: Party
+    where
+        signatory planner
+
+        nonconsuming choice AssignRequirement: ContractId RequirementAssignment
+            with 
+                requirement: Requirement
+            controller planner
+                do create RequirementAssignment
+                    with requirement
+
+
+-- | Proposal contract
+template RequirementAssignment
+    with
+        requirement: Requirement
+    where
+        signatory requirement.planner
+        observer requirement.productionManager
+
+        choice AcceptAssignment: ContractId Requirement
+            controller requirement.productionManager
+            do create requirement
+
+data RequirementInfo = RequirementInfo with
+    id: Text
+    product: Text
+    quantity: Int
+        deriving (Show, Eq)
+
+-- | Result contract
+template Requirement
+    with
+        planner: Party
+        productionManager: Party
+
+        requirementInfo: RequirementInfo
+        isFulfilled: Bool
+    where
+        signatory productionManager
+        observer planner
+
+        key (productionManager, requirementInfo.id) : (Party, Text)
+        maintainer key._1
+
+        choice Fulfill: ContractId Requirement
+            controller productionManager
+            do
+                create this with
+                    isFulfilled = True
+
+-- | ------------------------------------------------------------------------------------------------------------
+
+-- | Service contract
+template ProductionService
+    with
+        manager: Party
+    where
+        signatory manager
+
+        nonconsuming choice SetupProductLot: ContractId ProductLot
+            with reqId: Text
+            controller manager
+                do
+                    (reqCId, req) <- fetchByKey @Requirement (manager, reqId)
+                    create ProductLot
+                        with
+                            lotManager = manager
+                            lotResponsible = manager
+                            requirementInfo = req.requirementInfo
+                            processMap = []
+                            completedProcesses = []
+
+
+-- | Result contract
+template ProductLot
+    with
+        lotManager: Party
+        lotResponsible: Party
+
+        requirementInfo: RequirementInfo
+        processMap: [(Text, Party, Int)]
+        completedProcesses: [((Text, Party, Int), Int)]
+    where
+        signatory lotResponsible
+        observer lotManager
+
+        key (lotResponsible, requirementInfo.id) : (Party, Text)
+        maintainer key._1
+
+        choice AssignProcess: ContractId ProcessAssignment
+            with
+                processResponsible: Party
+                name: Text
+                index: Int
+            controller lotResponsible
+                do
+                    create ProcessAssignment with
+                        process = Process with
+                            supervisor = lotResponsible
+                            responsible = processResponsible
+                            name
+                            index
+                            reqInfo = requirementInfo
+                            totalHours = 0
+                        productLot = ProductLot with
+                            lotResponsible = processResponsible
+                            ..
+
+        choice RequestRevision: ContractId ProcessRevisionRequest
+            with
+                completedProcess: ((Text, Party, Int), Int)
+            controller lotResponsible
+                do
+                    create ProcessRevisionRequest with
+                        completedProcess
+                        productLot = ProductLot with
+                            lotResponsible = lotManager
+                            completedProcesses = completedProcess :: completedProcesses
+                            ..
+
+        choice FulfillRequirement: ContractId Requirement
+            controller lotManager
+            do
+                exerciseByKey @Requirement (lotManager, requirementInfo.id) Fulfill
+
+
+
+-- | Proposal contract
+template ProcessRevisionRequest
+    with
+        completedProcess: ((Text, Party, Int), Int)
+        productLot: ProductLot
+    where
+        signatory completedProcess._1._2
+        observer productLot.lotManager
+
+        choice ReviewAndAccept: ContractId ProductLot
+            controller productLot.lotManager
+            do
+                create productLot
+
+                        
+-- | Proposal contract
+template ProcessAssignment
+    with
+        process: Process
+        productLot: ProductLot
+    where
+        signatory process.supervisor
+        observer process.responsible
+
+        choice AcceptProcessAssignment: ContractId Process
+            controller process.responsible
+            do
+                let 
+                    newMap = (process.name, process.responsible, process.index) :: productLot.processMap
+                create ProductLot with
+                    lotManager = productLot.lotManager
+                    lotResponsible = productLot.lotResponsible
+                    requirementInfo = productLot.requirementInfo
+                    processMap = sortOn (\x -> x._3) newMap
+                    completedProcesses = productLot.completedProcesses
+                create process
+        
+-- | Result contract
+template Process
+    with
+        supervisor: Party
+        responsible: Party
+        name: Text
+        index: Int
+        reqInfo: RequirementInfo
+        totalHours: Int
+    where
+        signatory responsible
+
+        choice AddWorkedHours: ContractId Process
+            with workedHours: Int
+            controller responsible
+            do
+                create this with
+                    totalHours = totalHours + workedHours
+
+        choice Complete: ContractId ProcessRevisionRequest
+            controller responsible
+            do
+                exerciseByKey @ProductLot (responsible, reqInfo.id) RequestRevision
+                    with 
+                        completedProcess = ((name, responsible, index), totalHours)
+
+
+        
+

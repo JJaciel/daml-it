@@ -1,0 +1,48 @@
+module IterativeExample where
+
+import Daml.Script
+
+-- Recursion
+fibonacci: Int -> Int
+fibonacci n
+    | n <= 2 = 1
+    | otherwise = fibonacci (n - 2) + fibonacci (n - 1)
+
+
+testFibonacci : Script()
+testFibonacci = script do
+    debug $ fibonacci 7 -- trace: 13 ?
+
+-- Map Functions
+modulusUsingMap: [Int] -> Int -> [Int]
+modulusUsingMap x y = map (% y) x
+
+doubleUsingMap: [Int] -> [Int]
+doubleUsingMap x = map (* 2) x
+
+testModulusUsingMap : Script()
+testModulusUsingMap = script do
+    debug $ modulusUsingMap [14, 15, 19, 20] 3
+    debug $ 14 % 3 -- return the reminder after dividing 14 / 3
+    debug $ doubleUsingMap [6, 12, 1]
+ 
+-- Folds
+sumList: [Int] -> Int
+sumList x = foldl (+) 0 x
+
+multiplyThem: [Int] -> Int
+multiplyThem x = foldl (*) 1 x 
+
+listToText: [Int] -> Text
+listToText x = foldl (\acc y -> acc <> show y) "leftToRight: " x
+
+reverseListToText: [Int] -> Text
+reverseListToText x = foldr (\y acc -> acc <> show y) "rightToLeft: " x
+
+testSumList : Script()
+testSumList = script do
+    debug $ sumList [1, 2, 4] -- trace: 7
+    debug $ multiplyThem [2, 3] -- trace: 6
+
+    debug $ listToText [1, 2, 3] -- trace: "leftToRight: 123"
+    debug $ reverseListToText [1, 2, 3] -- trace: "rightToLeft: 321"

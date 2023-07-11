@@ -1,0 +1,74 @@
+module Main where
+
+import Daml.Script
+
+type ItemCustodyId = ContractId ItemCustody
+
+-- tracks chain of custody of my property
+template ItemCustody
+    with
+        owner : Party
+        custodian : Party
+        neighbor : Party
+        itemName : Text
+        meterCount : Int -- shutter clicks
+
+    where
+        signatory owner
+        observer neighbor
+
+        observer owner
+        choice ReleaseItemTo : ItemCustodyId
+            with
+                friend : Party
+                currentMeterCount : Int
+            controller owner
+            do 
+                create this with
+                    custodian = friend 
+                    meterCount = currentMeterCount
+        observer custodian
+        choice ReturnItemTo : ItemCustodyId
+            with
+                rightfulOwner : Party
+                currentMeterCount : Int
+            controller custodian
+            do 
+                create this with
+                    custodian = rightfulOwner 
+                    meterCount = currentMeterCount
+
+-- test
+-- setup : Script ItemCustodyId
+-- setup = script do
+--     jerry <- allocateParty "Jerry"
+--     elaine <- allocateParty "Elaine"
+--     kramer <- allocateParty "Kramer"
+
+--     brandNewCamera <- submit jerry do
+--         createCmd ItemCustody with
+--             owner = jerry
+--             custodian = jerry
+--             neighbor = kramer
+--             itemName = "Really expensive cammera"
+--             meterCount = 347
+
+--     elaineHasCamera <- submit jerry do
+--         exerciseCmd brandNewCamera ReleaseItemTo with friend = elaine, currentMeterCount = 360
+
+--     submit elaine do
+--         exerciseCmd elaineHasCamera ReturnItemTo with rightfulOwner = jerry, currentMeterCount = 1000
+
+setup : Script ()
+setup = script do
+-- user_setup_begin
+    jaciel <- allocatePartyWithHint "Jaciel" (PartyIdHint "Jaciel")
+    claudia <- allocatePartyWithHint "Claudia" (PartyIdHint "Claudia")
+    tadeo <- allocatePartyWithHint "Tadeo" (PartyIdHint "Tadeo")
+    jacielId <- validateUserId "jaciel"
+    claudiaId <- validateUserId "claudia"
+    tadeoId <- validateUserId "tadeo"
+    createUser (User jacielId (Some jaciel)) [CanActAs jaciel]
+    createUser (User claudiaId (Some claudia)) [CanActAs claudia]
+    createUser (User tadeoId (Some tadeo)) [CanActAs tadeo]
+-- user_setup_end

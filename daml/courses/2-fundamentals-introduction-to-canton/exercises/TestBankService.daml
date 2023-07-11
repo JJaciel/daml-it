@@ -1,0 +1,35 @@
+module TestBankService where
+
+import Daml.Script
+import Main
+
+testBankService : Script()
+testBankService = script do
+    bank <- allocateParty "Bank"
+    alice <- allocateParty "Alice"
+    bob <- allocateParty "Bob"
+
+    aliceAccountCId <- submitMulti [bank, alice] [] do
+        createCmd BankAccount with
+            bank
+            accountOwner = alice
+            balance = 100.00
+
+    aliceAccountCId <- submit alice do
+        exerciseCmd aliceAccountCId Deposit
+            with amount = 20.00
+
+    bankServiceCId <- submit bank do
+        createCmd BankService with
+            bank
+    
+    submit bank do
+        exerciseCmd bankServiceCId CheckKey
+            with key = (bank, alice)
+
+    submit bank do
+        exerciseCmd bankServiceCId CheckKey
+            with key = (bank, bob)
+    
+    
+    return()

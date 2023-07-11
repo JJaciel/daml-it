@@ -1,0 +1,54 @@
+module LabFive where
+
+import Daml.Script
+import DA.Text (words)
+
+song : [(Text, Text)]
+song = [("do", "a deer, a female deer"), ("re", "a drop of golden sun"), ("mi", "a name, I call myself"), ("fa", "a long long way to run")]
+
+notes : [(b1, b2)] -> [b1]
+-- notes x = map (fst) x
+notes x = map (\x -> x._1) x
+
+
+meanings : [(a, b)] -> [b]
+-- meanings x = map (snd) x
+meanings x = map (\x -> x._2) x
+
+testMapFunctions : Script()
+testMapFunctions = script do
+    debug $ notes song
+    debug $ meanings song
+
+
+
+termFrequency: Text -> Text -> Decimal
+termFrequency w s =  intToDecimal (length (filter (== w) (words s))) / intToDecimal (length (words s))
+
+termFrequencyImproved: Text -> Text -> Decimal
+termFrequencyImproved term string = do 
+    let n = length (filter (==term) (words string)) 
+        d = length (words string)
+    intToDecimal n / intToDecimal d
+
+
+multiTermFrequency: Text -> [Text] -> [Decimal]
+multiTermFrequency x y = map (termFrequency x) y
+
+
+multiTermFrequencyWithFoldr: Text -> [Text] -> [Decimal]
+multiTermFrequencyWithFoldr x y = foldr (\z acc -> (termFrequency x z) :: acc ) [] y
+
+testMultiTermFrequency : Script ()
+testMultiTermFrequency = script do 
+    let 
+        x = "hello"
+        y = [ "hello from the other side I must have called a thousand times", 
+            "You say goodbye and I say hello hello hello",
+            "hello is it me you’re looking for",
+            "hello hello is anyone home"
+            ]
+
+    debug $ multiTermFrequency x y
+    debug $ multiTermFrequencyWithFoldr x y
+    return()

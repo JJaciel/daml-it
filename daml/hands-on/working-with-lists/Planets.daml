@@ -1,0 +1,82 @@
+module Planets where
+
+import Daml.Script
+import DA.List
+
+type PlanetarySystemId = ContractId PlanetarySystem
+
+template PlanetarySystem
+    with
+        astronomer : Party
+        planets : [Text]
+    where
+        signatory astronomer
+
+        -- Add Planet to the list
+        choice AddPlanet : PlanetarySystemId with
+           planetToAdd : Text
+         controller astronomer
+            do 
+                assertMsg "already exists!" (notElem planetToAdd planets) -- check that planet is not already on list
+                create this with 
+                    -- append is the best way since Haskell treat lists as linked lists, so it take O(n) to insert at the end
+                    -- planets = planetToAdd :: planets -- append to the planets list (Add to beginning of list)
+                    -- planets = reverse (planetToAdd :: planets) -- reverse the list
+                    -- planets = planets ++ [planetToAdd] -- only when is a MUST you can add to the end (takes O(n))
+                    -- planets = dedup (planetToAdd :: planets) -- removes the duplicated items
+                    planets = sort (planetToAdd :: planets) -- sort
+
+        -- Add Planets to the list
+        choice AddPlanets : PlanetarySystemId with
+           planetsToAdd : [Text]
+         controller astronomer
+            do 
+                create this with 
+                    planets = planets ++ planetsToAdd
+
+        -- Remove Planet from the list
+        choice RemovePlanet : PlanetarySystemId with
+           planetToRemove : Text
+         controller astronomer
+            do
+                assertMsg "Cannot find this planet" (elem planetToRemove planets)
+                create this with 
+                    planets = delete planetToRemove planets
+
+              
+setup : Script PlanetarySystemId
+setup = script do
+    neal <- allocatePartyWithHint "Neal" (PartyIdHint "Neal")
+    nealId <- validateUserId "neal"
+    createUser (User nealId (Some neal)) [CanActAs neal]
+
+    solarSys <- submit neal do
+        createCmd PlanetarySystem with
+            astronomer = neal
+            planets = ["Earth", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"]
+
+    
+    -- Uranus (1781)
+    uranusDiscovered <- submit neal do 
+        exerciseCmd solarSys AddPlanet with planetToAdd = "Uranus"
+
+    -- Neptune (1846)
+    neptuneDiscovered <- submit neal do 
+        exerciseCmd uranusDiscovered AddPlanet with planetToAdd = "Neptune"
+
+    -- Pluto (1930)
+    plutoDiscovered <- submit neal do 
+        exerciseCmd neptuneDiscovered AddPlanet with planetToAdd = "Pluto"
+
+    -- Pluto removed
+    plutoRemoved <- submit neal do
+        exerciseCmd plutoDiscovered RemovePlanet with planetToRemove = "Pluto"
+
+    -- Pluto restored
+    plutoRestored <- submit neal do
+        exerciseCmd plutoRemoved AddPlanet with planetToAdd = "Pluto"
+    
+    -- adding a list of planets
+    submit neal do
+        let planetsToBeAdded = ["Eris", "Ceres"]
+        exerciseCmd plutoRestored AddPlanets with planetsToAdd = planetsToBeAdded

@@ -1,0 +1,84 @@
+module TestThat where
+
+import Daml.Script
+import DA.List (sort, head, sortOn, (\\), (!!), findIndex)
+import DA.Optional (isNone, fromSome)
+import DA.Foldable (Foldable(maximum))
+
+testShit : Script ()
+testShit = script do
+    let
+        array = [(1, "si"), (2, "maybe"), (3, "no")]
+        item = (2, "maybe")
+        item2 = (1, "si")
+        idx = findIndex (\a -> a == item2 ) array
+        notFoundIdx = findIndex (\a -> a == (4, "never") ) array
+        found = array !! fromSome idx
+        -- notFound = array !! fromSomeNote "errpr" notFoundIdx
+    
+    do
+        if (isNone notFoundIdx) then debug $ "si"
+        else debug $ "no"
+
+
+    debug $ "test"
+    debug $ idx
+    debug $ found
+    debug $ notFoundIdx
+
+testDifferentLists : Script ()
+testDifferentLists = script do
+    let
+        arr1 = [1, 2, 3, 4]
+        arr2 = [1, 2]
+        arr3 = [1, 2, 4, 5]
+        diffList = arr1 \\ arr2
+        empty = []
+        processMap = [("a", 1), ("b", 3), ("c", 5), ("d", 2)]
+        completedProcesses = [(("a", 1), ""), (("b", 3), "")]
+        completed = map (._1) completedProcesses
+        toComplete = sortOn (\x -> x._2) (processMap \\ completed)
+        next = head toComplete
+
+    debug $ show (arr2 \\ arr3)
+
+factorial: Int -> Int
+factorial num =
+    if (num < 2) then 1
+    else num * factorial (num - 1)
+
+testFactorial : Script ()
+testFactorial = script do
+    debug $ factorial 3
+    debug $ factorial 0
+    debug $ factorial 2
+    debug $ factorial 4
+
+
+getF: [(Int, Int)] -> [Int]
+getF lst = map (\x -> x._1) lst
+testList : Script ()
+testList = script do
+    let
+        arr0 = []
+        arr1 = [3, 4, 5, 2, 1, 0, 8]
+
+        nextIndex = do
+            if (not (null arr1)) 
+                then (maximum arr1) + 1
+                else 0
+
+    debug $ nextIndex
+
+data Item = Item with
+    name: Text
+        deriving (Show, Eq)
+
+testA : Script ()
+testA = script do
+    let 
+        a = Item with name = "a"
+        b = Item with name = "b"
+    assertMsg "Error here" (not (null [a, b]))
+    debug $ null [a, b]
+    

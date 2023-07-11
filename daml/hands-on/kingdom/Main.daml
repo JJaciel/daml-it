@@ -1,0 +1,44 @@
+module Main where
+
+import Daml.Script
+
+type KingdomId = ContractId Kingdom
+
+template Kingdom
+  with
+    currentKing : Party
+    futureKing  : Party
+    kingdomName   : Text
+  where
+    ensure kingdomName /= ""
+    signatory currentKing
+    observer futureKing
+    choice Give : KingdomId
+      with
+        successor : Party
+      controller futureKing
+      do create this with
+           futureKing = successor
+
+setup : Script KingdomId
+setup = script do
+-- user_setup_begin
+  mufasa <- allocatePartyWithHint "Mufasa" (PartyIdHint "Mufasa")
+  simba <- allocatePartyWithHint "Simba" (PartyIdHint "Simba")
+  mufasaId <- validateUserId "mufasa"
+  simbaId <- validateUserId "simba"
+  createUser (User mufasaId (Some mufasa)) [CanActAs mufasa]
+  createUser (User simbaId (Some simba)) [CanActAs simba]
+-- user_setup_end
+
+  mufasaKingdom <- submit mufasa do
+    createCmd Kingdom with
+      currentKing = mufasa
+      futureKing = mufasa
+      kingdomName = "Everything the ligth touches!"
+
+  simbaKingdom <- submit mufasa do
+    exerciseCmd mufasaKingdom Give with successor = simba
+
+  submit simba do
+    exerciseCmd simbaKingdom Give with successor = mufasa

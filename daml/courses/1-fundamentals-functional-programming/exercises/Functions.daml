@@ -1,0 +1,28 @@
+module Functions where
+import Daml.Script
+
+-- to declare a function, first has to be declared the function signature
+-- the data types before the arrow are the input arguments of the function
+-- the last data type of the signature is always the expected result
+-- the right arrow can be read as "maps to"
+increment: Int -> Int
+-- the next line contains the implementation of the function
+-- arguments in Daml are listed next to the functions name separated by an space
+increment n = n + 1
+
+-- The compiler can infer the return type
+-- add: Int -> Int -> Int
+add a b = a + b
+
+multiply: Int -> Int -> Int
+multiply a b = a * b
+
+-- no input arguments
+-- the parentheses indicate that the script returns nothing
+testFunctions: Script() 
+testFunctions = script do
+-- the dollar sign following the debug is a shorhand notation, enclose what needs to be printed
+    debug $ increment 3
+    debug (increment 5)
+    debug $ add 4 5
+    debug $ multiply 4 5

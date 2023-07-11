@@ -1,0 +1,51 @@
+module Main where
+
+type BankAccountId = ContractId BankAccount
+
+template BankAccount
+  with
+    bank                : Party
+    accountOwner        : Party
+    balance             : Numeric 2
+  where
+    signatory bank, accountOwner
+
+    key (bank, accountOwner): (Party, Party)
+    maintainer key._1
+
+    choice Deposit : BankAccountId
+      with
+        amount : Numeric 2
+      controller accountOwner
+      do 
+        create this with
+          balance = amount
+
+template BankService
+  with 
+    bank : Party
+  where 
+    signatory bank
+
+    nonconsuming choice CheckKey: ()
+      with key : (Party, Party)
+      controller bank
+      do
+        lookupByKey @BankAccount key
+        return()
+
+    nonconsuming choice FindAccountById : BankAccount 
+      with
+        id: BankAccountId
+      controller bank
+      do
+        fetch @BankAccount id
+
+    nonconsuming choice FindAccountByKey : BankAccount
+      with key : (Party, Party)
+      controller bank
+      do
+        account <- fetchByKey @BankAccount key
+        return account._2
+          
+    

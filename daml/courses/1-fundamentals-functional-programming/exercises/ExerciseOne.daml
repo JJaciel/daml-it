@@ -1,0 +1,33 @@
+module ExerciseOne where
+
+import Daml.Script
+
+-- Problem Statement 1
+quadFunction : Int -> Int -> Int -> Int
+quadFunction x y z = (3 * x ^ 2) + (2 * y) + z
+
+testQuadFunction: Script()
+testQuadFunction = script do
+    debug $ quadFunction 1 2 3
+
+testLambda: Script()
+testLambda = script do
+    debug $ (\ (x: Int) (y: Int) (z: Int)  -> (3 * x ^ 2) + (2 * y) + z) 1 2 3
+    
+
+-- Problem Statement 2
+doubleMe: Int -> Int
+doubleMe a = a * 2
+
+doubleUs: Int -> Int -> Int
+doubleUs a b = (doubleMe a) + (doubleMe b)
+
+
+
+testDouble: Script()
+testDouble = script do
+    debug $ doubleMe 3
+    debug $ doubleUs 3 4
+    debug $ 3 `doubleUs` 4 -- prefix function used with infix notation
+
+

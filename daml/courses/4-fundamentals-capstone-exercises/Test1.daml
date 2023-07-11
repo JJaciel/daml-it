@@ -1,0 +1,107 @@
+module Test1 where
+
+import Daml.Script
+import Capstone
+
+setupPartyAndUser: Text -> Text -> Text -> Script Party
+setupPartyAndUser partyName partyHint userName = script do
+    party <- allocatePartyWithHint partyName (PartyIdHint partyHint)
+    id <- validateUserId userName
+    createUser (User id (Some party)) [CanActAs party]
+    return party
+
+
+setup : Script ()
+setup = script do
+    penny <- setupPartyAndUser "Planner" "PLANNER" "Penny"
+    manny <- setupPartyAndUser "ProductionManager" "PROD_MANAGER" "Manny"
+    oscar <- setupPartyAndUser "Operator" "OPERATOR_A" "Oscar"
+    omar <- setupPartyAndUser "Operator" "OPERATOR_B" "Omar"
+
+    -- | Material Resource Planning Service
+    mrpCId <- submit penny do
+        createCmd MRPService with
+            planner = penny
+
+    -- | Planner assign requirement to Production Manager
+    reqAssignmentCId <- submit penny do
+        exerciseCmd mrpCId AssignRequirement with
+            requirement = Requirement with
+                planner = penny
+                productionManager = manny
+                isFulfilled = False
+                requirementInfo = RequirementInfo with
+                    id = "101"
+                    product = "Bicycle"
+                    quantity = 10
+
+    -- | Production Manager Accepts the Challenge
+    requirementCId <- submit manny do
+        exerciseCmd reqAssignmentCId AcceptAssignment
+
+    -- | Production Manager Creates the ProductLot
+    productLotCId <- submit manny do
+        exerciseCmd requirementCId SetupProductLot
+
+    -- | Production Manager Setup Processes
+    productLotCId <- submit manny do
+        exerciseCmd productLotCId AddProcessToWorkflow with
+            operator = oscar
+            name = "First Process"
+    
+    productLotCId <- submit manny do
+        exerciseCmd productLotCId AddProcessToWorkflow with
+            operator = omar
+            name = "Second Process"
+
+    -- | Production Manager Assigns 1st Process to Operator (Oscar)
+    processAssignmentCId <- submit manny do
+        exerciseCmd productLotCId AssignNextProcess
+    
+    processCId <- submit oscar do
+        exerciseCmd processAssignmentCId AcceptProcessAssignment
+    
+    processCId <- submit oscar do
+        exerciseCmd processCId AddWorkedHours
+            with workedHours = 3
+    
+    processCId <- submit oscar do
+        exerciseCmd processCId AddWorkedHours
+            with workedHours = 5
+    
+    processRevisionRequestCId <- submit oscar do
+        exerciseCmd processCId RequestRevision
+
+    processedProductLotCId <- submit manny do
+        exerciseCmd processRevisionRequestCId ReviewAndReject with
+            feedback = "Muy Mal"
+
+    -- processedProductLotCId <- submit manny do
+    --     exerciseCmd processRevisionRequestCId ReviewAndAccept
+
+    -- | Production Manager Assigns 2nd Process to Operator (Omar)
+    processAssignmentCId2 <- submit manny do
+        exerciseCmd processedProductLotCId AssignNextProcess
+
+    processCId <- submit oscar do
+        exerciseCmd processAssignmentCId2 AcceptProcessAssignment
+
+    -- processCId <- submit omar do
+    --     exerciseCmd processAssignmentCId2 AcceptProcessAssignment
+
+    -- processCId <- submit omar do
+    --     exerciseCmd processCId AddWorkedHours
+    --         with workedHours = 10
+    
+    -- processRevisionRequestCId <- submit omar do
+    --     exerciseCmd processCId RequestRevision
+
+    -- processedProductLotCId <- submit manny do
+    --     exerciseCmd processRevisionRequestCId ReviewAndAccept
+    
+    -- | Production Manager Fulfills Requirement
+    -- submit manny do
+    --     exerciseCmd processedProductLotCId FulfillRequirement
+
+
+    return()
