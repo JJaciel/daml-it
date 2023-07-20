@@ -1,0 +1,10 @@
+module Util (fromSomeM, headM) where
+
+fromSomeM : CanAbort m => Text -> Optional a -> m a
+fromSomeM _ (Some a) = return a
+fromSomeM what None = abort $ what <> " expected a value."
+
+
+headM : CanAbort m => Text -> [a] -> m a
+headM what []     = abort $ what <> " expected to have an element."
+headM _    (x::_) = return x

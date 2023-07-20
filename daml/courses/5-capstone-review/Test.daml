@@ -1,0 +1,240 @@
+module Test where
+
+import Daml.Script
+import Main
+import Setup
+
+{-
+    Min 1 Full Scenario & Min 3 Happy Paths
+        + testCreateRequirement: planner creates a proposal and manager accepts creating Requirement
+            1. planner exercises AssignRequirement to propose Requirement and transfer ownership to manager
+            2. manager exercises AcceptRequirement and creates Requirement
+        + testCreateProductLot: manager creates ProductLot and add the processes to be performed
+            3. manager exercises SetupProductLot to create ProductLot based on Requirement
+            4. manager exercises AddProcessToWorkflow to add ProcessWorkflowItem to processWorkflow in ProductLot
+        + testProcessAssignationAndProcessing: manager assigns first process in the list and operator performs
+            5. manager exercises AssignNextProcess to create ProcessReview to transfer ProductLot ownership to operator
+            6. operator exercisises AcceptAssignment in ProcessReview, which creates a Process and accepts ownership over ProductLot
+            7. operator exercises AddWorkedHours in Process
+            8. operator exercises RequestRevision, which creates a ProcessReview to transfer ProductLot ownership to manager
+        + testProcessConformant: manager accepts the performed work and assign next process
+            9. manager exercises SetProcessAsConformant and get ProductLot transfer to it
+            10. manager exercises AssignNextProcess to continue
+                10.1 operator2 accepts, perform process and request revision
+        + testProcessNonConformant: manager rejects the performed work, it reinsert the processItem in the processWorkflow
+            11. manager exercises SetProcessAsNonConformant, the rejected item is re-inserted in the list
+                11.1 manager exercises AssignNextProcess to continue
+            12. operator2 accepts and perform reprocess
+            13. manager exercises SetProcessAsConformant and worflow continue with 3rd process
+                13.1 3rd process gets completed by operator3
+        + testRequirementFulfilled: manager accepts last process and fulfill the requirement
+            14. manager accepts last process
+            15. manager exercises FulfillRequirement, Requirement is recreated with fulfilled data
+
+    Min 3 Unhappy Paths
+        - cantCreateNotValidProduct: planner cannot create a RequirementAssignment with invalid product data
+            - does not accept an invalid Id
+            - does not accept an invalid product name
+            - does not accept an invalid quantity
+        - cantStartAWorkflowWithoutProcesses: manager cannot exercise AssignNextProcess without processes on the processWorkflow
+            - cannot AssignNextProcess without processes
+            - cannot create a process twice
+            - cannot add new processes after first process started
+        - cantRequestReviewWithoutHours: operator cannot exercise CreateRevision without hours
+        - cantFulfillWithoutPerformedProcesses: manager cannot exercise FulfillRequirement without performed processes
+-}
+
+-- + testCreateRequirement: planner creates a proposal and manager accepts creating Requirement
+testCreateRequirement = script do
+    (testParties@TestParties{..}, mrpCId) <- setupTestMRPService
+    -- 1. planner exercises AssignRequirement to propose Requirement and transfer ownership to manager
+    aReqCId <- submit planner do
+        exerciseCmd mrpCId AssignRequirement with
+                productionManager = manager
+                requirement = RequirementInfo with
+                        id = "950"
+                        product = "Mountain Bike"
+                        quantity = 20
+    -- 2. manager exercises AcceptRequirement and creates Requirement
+    reqCId <- submit manager do exerciseCmd aReqCId AcceptRequirement
+    return (testParties, reqCId)
+
+-- + testCreateProductLot: manager creates ProductLot and add the processes to be performed
+testCreateProductLot = script do
+    (testParties@TestParties{..}, reqCId) <- testCreateRequirement
+    -- 3. manager exercises SetupProductLot to create ProductLot based on Requirement
+    prodLotCId <- submit manager do
+        exerciseCmd reqCId SetupProductLot
+    -- 4. manager exercises AddProcessToWorkflow to add ProcessWorkflowItem to processWorkflow in ProductLot
+    prodLotCId <- submit manager do
+        exerciseCmd prodLotCId AddProcessToWorkflow with
+            operator = operator1
+            name = "Assembly"
+    
+    prodLotCId <- submit manager do
+        exerciseCmd prodLotCId AddProcessToWorkflow with
+            operator = operator2
+            name = "Paint"
+    
+    prodLotCId <- submit manager do
+        exerciseCmd prodLotCId AddProcessToWorkflow with
+            operator = operator3
+            name = "Add Accessories"
+    
+    return (testParties, reqCId, prodLotCId)
+
+-- + testProcessAssignationAndProcessing: manager assigns first process in the list and operator performs
+testProcessAssignationAndProcessing = script do
+    (testParties@TestParties{..}, reqCId, prodLotCId) <- testCreateProductLot
+    -- 5. manager exercises AssignNextProcess to create ProcessReview to transfer ProductLot ownership to operator
+    procAssignmentCId <- submit manager do
+        exerciseCmd prodLotCId AssignNextProcess
+    -- 6. operator exercisises AcceptAssignment in ProcessReview, which creates a Process and accepts ownership over ProductLot
+    procCId <- submit operator1 do
+        exerciseCmd procAssignmentCId AcceptAssignment
+    -- 7. operator exercises AddWorkedHours in Process
+    procCId <- submit operator1 do
+        exerciseCmd procCId AddWorkedHours
+            with hours = 4
+    procCId <- submit operator1 do
+        exerciseCmd procCId AddWorkedHours
+            with hours = 7
+    -- 8. operator exercises RequestRevision, which creates a ProcessReview to transfer ProductLot ownership to manager
+    procRevRequestCId <- submit operator1 do
+        exerciseCmd procCId RequestRevision
+    return (testParties, reqCId, procRevRequestCId)
+    
+-- + testProcessConformant: manager accepts the performed work and assign next process
+testProcessConformant = script do
+    (testParties@TestParties{..}, reqCId, procRevRequestCId) <- testProcessAssignationAndProcessing
+    -- 9. manager exercises SetProcessAsConformant and get ProductLot transfer to it
+    prodLotCId <- submit manager do
+        exerciseCmd procRevRequestCId SetProcessAsConformant
+    -- 10. manager exercises AssignNextProcess to continue
+    procAssignmentCId <- submit manager do
+        exerciseCmd prodLotCId AssignNextProcess
+    -- 10.1 operator2 accepts and perform process
+    procCId <- submit operator2 do
+        exerciseCmd procAssignmentCId AcceptAssignment
+    procCId <- submit operator2 do
+        exerciseCmd procCId AddWorkedHours
+            with hours = 10
+    procRevRequestCId <- submit operator2 do
+        exerciseCmd procCId RequestRevision
+    return (testParties, reqCId, procRevRequestCId)
+
+-- + testProcessNonConformant: manager rejects the performed work, it reinsert the processItem in the processWorkflow
+testProcessNonConformant = script do
+    (testParties@TestParties{..}, reqCId, procRevRequestCId) <- testProcessConformant
+    -- 11. manager exercises SetProcessAsNonConformant, the rejected item is re-inserted in the list
+    prodLotCId <- submit manager do
+        exerciseCmd procRevRequestCId SetProcessAsNonConformant with
+            feedback = "Paint is not shiny as it should"
+    -- 11.1 manager exercises AssignNextProcess to continue
+    procAssignmentCId <- submit manager do
+        exerciseCmd prodLotCId AssignNextProcess
+    -- 12. operator2 accepts and perform reprocess
+    procCId <- submit operator2 do
+        exerciseCmd procAssignmentCId AcceptAssignment
+    procCId <- submit operator2 do
+        exerciseCmd procCId AddWorkedHours
+            with hours = 10
+    procRevRequestCId <- submit operator2 do
+        exerciseCmd procCId RequestRevision
+    -- 13. manager exercises SetProcessAsConformant and worflow continue with 3rd process
+    prodLotCId <- submit manager do
+        exerciseCmd procRevRequestCId SetProcessAsConformant
+    -- 13.1 3rd process gets completed by operator3
+    procAssignmentCId <- submit manager do
+        exerciseCmd prodLotCId AssignNextProcess
+    procCId <- submit operator3 do
+        exerciseCmd procAssignmentCId AcceptAssignment
+    procCId <- submit operator3 do
+        exerciseCmd procCId AddWorkedHours
+            with hours = 5
+    procRevRequestCId <- submit operator3 do
+        exerciseCmd procCId RequestRevision    
+    return (testParties, reqCId, procRevRequestCId)
+
+-- + testRequirementFulfilled: manager accepts last process and fulfill the requirement
+testRequirementFulfilled = script do
+    (testParties@TestParties{..}, reqCId, procRevRequestCId) <- testProcessNonConformant
+    -- 14. manager accepts last process
+    prodLotCId <- submit manager do
+        exerciseCmd procRevRequestCId SetProcessAsConformant
+    -- 15. manager exercises FulfillRequirement, Requirement is recreated with fulfilled data
+    submit manager do
+        exerciseCmd prodLotCId FulfillRequirement
+
+-- - cantCreateNotValidProduct: planner cannot create a RequirementAssignment with invalid product data
+cantCreateNotValidProduct = script do
+    (testParties@TestParties{..}, mrpCId) <- setupTestMRPService
+    let
+        invalidId = ""
+        invalidName = ""
+        invalidQuantity = 0
+    -- does not accept an invalid Id
+    submitMustFail planner do
+        exerciseCmd mrpCId AssignRequirement with
+                productionManager = manager
+                requirement = RequirementInfo with
+                        id = invalidId
+                        product = "Mountain Bike"
+                        quantity = 20
+    -- does not accept an invalid product name
+    submitMustFail planner do
+        exerciseCmd mrpCId AssignRequirement with
+                productionManager = manager
+                requirement = RequirementInfo with
+                        id = "101"
+                        product = invalidName
+                        quantity = 20
+    -- does not accept an invalid quantity
+    submitMustFail planner do
+        exerciseCmd mrpCId AssignRequirement with
+                productionManager = manager
+                requirement = RequirementInfo with
+                        id = "102"
+                        product = "Mountain Bike"
+                        quantity = invalidQuantity
+
+-- - cantStartAWorkflowWithoutProcesses: manager cannot exercise AssignNextProcess without processes on the processWorkflow
+cantStartAWorkflowWithoutProcesses = script do
+    (testParties@TestParties{..}, reqCId) <- testCreateRequirement
+    prodLotCId <- submit manager do
+        exerciseCmd reqCId SetupProductLot
+    -- cannot AssignNextProcess without processes
+    submitMustFail manager do
+        exerciseCmd prodLotCId AssignNextProcess
+    -- cannot create a process twice
+    prodLotCId <- submit manager do
+        exerciseCmd prodLotCId AddProcessToWorkflow with
+            operator = operator1
+            name = "Polish"
+    submitMustFail manager do
+        exerciseCmd prodLotCId AddProcessToWorkflow with
+            operator = operator2
+            name = "Polish"
+    -- cannot add new processes after first process started
+    procAssignmentCId <- submit manager do
+        exerciseCmd prodLotCId AssignNextProcess
+    submitMustFail manager do
+        exerciseCmd prodLotCId AddProcessToWorkflow with
+            operator = operator3
+            name = "Paint"
+
+-- - cantRequestReviewWithoutHours: operator cannot exercise CreateRevision without hours
+cantRequestReviewWithoutHours = script do
+    (testParties@TestParties{..}, reqCId, prodLotCId) <- testCreateProductLot
+    procAssignmentCId <- submit manager do
+        exerciseCmd prodLotCId AssignNextProcess
+    procCId <- submit operator1 do
+        exerciseCmd procAssignmentCId AcceptAssignment
+    submitMustFail operator2 do
+        exerciseCmd procCId RequestRevision
+
+-- - cantFulfillWithoutPerformedProcesses: manager cannot exercise FulfillRequirement without performed processes
+cantFulfillWithoutPerformedProcesses = script do
+    (testParties@TestParties{..}, reqCId, prodLotCId) <- testCreateProductLot
+    submitMustFail manager do
+        exerciseCmd prodLotCId FulfillRequirement

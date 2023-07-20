@@ -23,5 +23,5 @@ This cover all the learnings from the courses daml fundamentals. [more info](htt
 - ________ start-with-haskell
 
 ### files
-notes are `markdown` files
-exercises and lab are `daml` files
+- notes are `markdown` files
+- exercises and lab are `daml` files

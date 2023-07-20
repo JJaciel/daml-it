@@ -1,0 +1,57 @@
+module Setup where
+
+import Daml.Script
+import Main
+
+data TestParties = TestParties with
+    planner: Party
+    manager: Party
+    operator1: Party
+    operator2: Party
+    operator3: Party
+
+setupPartyAndUser: Text -> Text -> Text -> Script Party
+setupPartyAndUser partyName partyHint userName = script do
+    party <- allocatePartyWithHint partyName (PartyIdHint partyHint)
+    id <- validateUserId userName
+    createUser (User id (Some party)) [CanActAs party]
+    return party
+
+setupParties = script do
+    penny <- setupPartyAndUser "Planner" "PLANNER" "Penny"
+    manny <- setupPartyAndUser "ProductionManager" "PROD_MANAGER" "Manny"
+    oscar <- setupPartyAndUser "Operator" "OPERATOR_A" "Oscar"
+    omar <- setupPartyAndUser "Operator" "OPERATOR_B" "Omar"
+    olivia <- setupPartyAndUser "Operator" "OPERATOR_C" "Olivia"
+
+    return TestParties with
+        planner = penny
+        manager = manny
+        operator1 = oscar
+        operator2 = omar
+        operator3 = olivia
+
+setupTestMRPService : Script (TestParties, ContractId MRPService)
+setupTestMRPService = script do
+    testParties@TestParties{..} <- setupParties
+
+    mrpCId <- submit planner do
+        createCmd MRPService with
+            planner
+    
+    return (testParties, mrpCId)
+
+
+setupNavigator : Script ()
+setupNavigator = script do
+    (testParties@TestParties{..}, mrpCId) <- setupTestMRPService
+
+    submit planner do
+        exerciseCmd mrpCId AssignRequirement with
+            productionManager = manager
+            requirement = RequirementInfo with
+                    id = "1040"
+                    product = "BMX Bike"
+                    quantity = 3
+
+    return()
